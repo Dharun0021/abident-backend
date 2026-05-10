@@ -5,6 +5,7 @@ const {
   loginDoctor,
   respondToBooking,
   updateDoctorProfile,
+  updateFcmToken,
   getAllDoctors,
 } = require("../controllers/doctorController");
 
@@ -15,5 +16,6 @@ router.post("/login", loginDoctor);
 router.get("/all", getAllDoctors);
 router.post("/respond", doctorAuth, respondToBooking);
 router.put("/profile", doctorAuth, updateDoctorProfile);
+router.post("/update-fcm-token", doctorAuth, updateFcmToken);
 
 module.exports = router;

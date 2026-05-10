@@ -57,6 +57,9 @@ exports.registerUser = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        doctorId: null,
+        doctorName: null,
+        doctorSpecialization: null,
       },
     });
   } catch (err) {
@@ -112,6 +115,9 @@ exports.loginUser = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        doctorId: user.doctorId,
+        doctorName: user.doctorName,
+        doctorSpecialization: user.doctorSpecialization,
       },
     });
   } catch (err) {
@@ -226,6 +232,83 @@ exports.deleteUser = async (req, res) => {
     }
 
     res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// 🔥 SELECT DOCTOR
+exports.selectDoctor = async (req, res) => {
+  try {
+    const { userId, doctorId } = req.body;
+
+    if (!userId || !doctorId) {
+      return res.status(400).json({ message: "userId and doctorId are required" });
+    }
+
+    // Fetch doctor details
+    const Doctor = require("../models/Doctor");
+    const doctor = await Doctor.findById(doctorId);
+
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    // Update user with doctor selection
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        doctorId: doctorId,
+        doctorName: doctor.name,
+        doctorSpecialization: doctor.specialization,
+      },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "Doctor selected successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        doctorId: user.doctorId,
+        doctorName: user.doctorName,
+        doctorSpecialization: user.doctorSpecialization,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// 🔥 UPDATE FCM TOKEN
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const { fcmToken } = req.body;
+    const userId = req.userId;
+
+    if (!fcmToken) {
+      return res.status(400).json({ message: "fcmToken is required" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { fcmToken },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({
+      message: "FCM token updated successfully",
+      fcmToken: user.fcmToken,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

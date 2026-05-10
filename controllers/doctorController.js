@@ -56,6 +56,13 @@ exports.loginDoctor = async (req, res) => {
   try {
     const { email, password, fcmToken } = req.body;
 
+    console.log('=== DOCTOR LOGIN DEBUG ===');
+    console.log('Email:', email);
+    console.log('Password:', password ? '****' : 'NOT PROVIDED');
+    console.log('FCM Token received:', fcmToken);
+    console.log('FCM Token is null:', fcmToken === null || fcmToken === undefined);
+    console.log('===========================');
+
     if (!email || !password) {
       return res.status(400).json({ message: "email and password are required" });
     }
@@ -71,15 +78,29 @@ exports.loginDoctor = async (req, res) => {
     }
 
     if (fcmToken && fcmToken !== doctor.fcmToken) {
+      console.log('Updating FCM token...');
       doctor.fcmToken = fcmToken;
       await doctor.save();
+      console.log('FCM token updated successfully');
+    } else if (!fcmToken) {
+      console.log('No FCM token provided, skipping update');
     }
+
+    console.log('Doctor after update:', {
+      id: doctor._id,
+      name: doctor.name,
+      email: doctor.email,
+      fcmToken: doctor.fcmToken,
+    });
 
     const token = jwt.sign(
       { userId: doctor._id, email: doctor.email, role: "DOCTOR" },
       process.env.JWT_SECRET || "your_super_secret_jwt_key_12345",
       { expiresIn: "7d" }
     );
+
+    console.log('JWT Token generated:', token);
+    console.log('===========================');
 
     return res.status(200).json({
       message: "Doctor login successful",
@@ -92,6 +113,7 @@ exports.loginDoctor = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error('Login error:', error.message);
     return res.status(500).json({ message: error.message });
   }
 };
@@ -100,7 +122,7 @@ exports.respondToBooking = async (req, res) => {
   try {
     const doctorId = req.userId;
     const { bookingId, status, newTime } = req.body;
-    const allowedStatuses = ["ACCEPTED", "REJECTED", "RESCHEDULED"];
+    const allowedStatuses = ["ACCEPTED", "REJECTED", "RESCHEDULED", "COMPLETED"];
 
     if (!bookingId || !status) {
       return res
@@ -110,7 +132,7 @@ exports.respondToBooking = async (req, res) => {
 
     if (!allowedStatuses.includes(status)) {
       return res.status(400).json({
-        message: "status must be ACCEPTED, REJECTED or RESCHEDULED",
+        message: "status must be ACCEPTED, REJECTED, RESCHEDULED or COMPLETED",
       });
     }
 
@@ -148,16 +170,50 @@ exports.respondToBooking = async (req, res) => {
     await booking.save();
 
     const user = await User.findById(booking.userId);
+    
+    console.log('\n╔════════════════════════════════════════════════════════════╗');
+    console.log('║         📱 STATUS UPDATE NOTIFICATION LOG                 ║');
+    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('👤 User ID:', booking.userId);
+    console.log('👤 User Name:', user?.name || 'Unknown');
+    console.log('🔔 New Status:', status);
+    console.log('📱 User FCM Token:', user?.fcmToken ? `✅ ${user.fcmToken.substring(0, 30)}...` : '❌ NOT FOUND');
+    console.log('════════════════════════════════════════════════════════════');
+
     if (user?.fcmToken) {
-      await sendNotification(
+      let message = "";
+      switch (status) {
+        case "ACCEPTED":
+          message = "Your appointment has been accepted. We will update you soon.";
+          break;
+        case "REJECTED":
+          message = "Your appointment has been rejected.";
+          break;
+        case "RESCHEDULED":
+          message = `Your appointment has been rescheduled to ${new Date(newTime).toLocaleString()}.`;
+          break;
+        case "COMPLETED":
+          message = "Your appointment has been completed.";
+          break;
+        default:
+          message = `Your appointment status is now ${status}.`;
+      }
+      
+      console.log('📤 Sending FCM notification to user...');
+      const notificationResult = await sendNotification(
         user.fcmToken,
         "Appointment Update",
-        `Your appointment is ${status}`,
+        message,
         {
           bookingId: booking._id,
           status,
         }
       );
+      console.log('✅ Notification Result:', notificationResult);
+      console.log('════════════════════════════════════════════════════════════\n');
+    } else {
+      console.log('❌ NO FCM TOKEN FOUND - NOTIFICATION NOT SENT');
+      console.log('════════════════════════════════════════════════════════════\n');
     }
 
     return res.status(200).json({
@@ -206,6 +262,43 @@ exports.updateDoctorProfile = async (req, res) => {
 
     return res.status(200).json({
       message: "Profile updated successfully",
+      doctor: {
+        id: doctor._id,
+        name: doctor.name,
+        email: doctor.email,
+        specialization: doctor.specialization,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+exports.updateFcmToken = async (req, res) => {
+  try {
+    const doctorId = req.userId;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({ message: "fcmToken is required" });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(doctorId)) {
+      return res.status(400).json({ message: "Invalid Doctor ID in token" });
+    }
+
+    const doctor = await Doctor.findByIdAndUpdate(
+      doctorId,
+      { fcmToken },
+      { new: true }
+    );
+
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor not found" });
+    }
+
+    return res.status(200).json({
+      message: "FCM token updated successfully",
       doctor: {
         id: doctor._id,
         name: doctor.name,

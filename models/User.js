@@ -26,6 +26,19 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
   address: addressSchema,
+  doctorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Doctor',
+    default: null,
+  },
+  doctorName: {
+    type: String,
+    default: null,
+  },
+  doctorSpecialization: {
+    type: String,
+    default: null,
+  },
   createdAt: {
     type: Date,
     default: Date.now,

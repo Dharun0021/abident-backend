@@ -31,7 +31,7 @@ const bookingSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["PENDING", "ACCEPTED", "REJECTED", "RESCHEDULED"],
+      enum: ["PENDING", "ACCEPTED", "REJECTED", "RESCHEDULED", "COMPLETED"],
       default: "PENDING",
     },
     newTime: {
